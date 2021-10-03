@@ -1,0 +1,17 @@
+{
+  "name": "bedrockts",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc && ts-node scripts/setupPackage.ts"
+  },
+  "engines": {
+    "node": ">=12.22.3"
+  },
+  "dependencies": {
+    "axios": "^0.22.0",
+    "ts-node": "^10.2.1",
+    "typescript": "^4.4.3"
+  }
+}

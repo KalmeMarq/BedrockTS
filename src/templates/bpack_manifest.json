@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Pack Example",
+    "description": "Pack Description Example",
+    "uuid": "bb1db046-bdc6-48ff-9f77-a5879e333415",
+    "version": [1, 0, 0],
+    "min_version_engine": [1, 14, 0]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "description": "Pack Description Example",
+      "uuid": "fab23dff-7162-492c-be97-125a3275318a",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "dd2b43b9-2f41-4a07-90ea-e131a874605b",
+      "version": [1, 0, 0]
+    }
+  ]
+}
