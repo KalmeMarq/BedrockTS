@@ -8,11 +8,12 @@ import { SkinClass } from './data/Skin'
 import { TerrainTextureClass } from './data/TerrainTexture'
 import { TextureClass } from './data/Texture'
 import { BlastFurnaceRecipeClass, CampfireRecipeClass, FurnaceRecipeClass, SmokerRecipeClass } from './recipes/CookingRecipe'
+import { PotionRecipeClass } from './recipes/PotionRecipe'
 import { RecipeClass } from './recipes/Recipe'
 import { ShapedRecipeClass } from './recipes/ShapedRecipe'
 import { ShapelessRecipeClass } from './recipes/ShapelessRecipe'
 import { Styles } from './styles'
-import { BedrockTSConfig, TBlockShape, TDescription, TResources, TTerrainTextures } from './types'
+import { BedrockTSConfig, TBlockShape, TDescription, TItemLike, TResources, TTerrainTextures } from './types'
 import { compactBasicArray, JsonArray, JsonObject } from './utils'
 
 export class Registry<T> {
@@ -51,6 +52,8 @@ export default class AddonPack {
     const root = join((config.saveOptions?.path ?? '.'), 'out', this.prepareDescription(config.name))
     if (existsSync(root)) {
       rmSync(join(process.cwd(), root), { recursive: true })
+      mkdirSync(join(process.cwd(), root), { recursive: true })
+    } else {
       mkdirSync(join(process.cwd(), root), { recursive: true })
     }
 
@@ -179,7 +182,7 @@ export default class AddonPack {
       localization_name: config.skin_pack_name ?? 'skin_pack_example'
     }
 
-    writeFileSync(join(root, 'skins.json'), JSON.stringify(skins, null, 2))
+    writeFileSync(join(root, 'skins.json'), compactBasicArray(skins, 2))
   }
 
   private async saveResourcePack(config: BedrockTSConfig, root: string, resources: TResources): Promise<void> {
@@ -266,7 +269,7 @@ export default class AddonPack {
       uis.push((n).replace('\\', '/'))
     })
 
-    if (uis.length > 0) writeFileSync(join(root, 'ui', 'ui_defs.json'), JSON.stringify({ ui_defs: uis }, null, 2))
+    if (uis.length > 0) writeFileSync(join(root, 'ui', '_ui_defs.json'), JSON.stringify({ ui_defs: uis }, null, 2))
 
     if (this.blocks.length > 0) {
       const blocks = new JsonObject()
@@ -393,20 +396,20 @@ export default class AddonPack {
     this.langs.push(new LangClass(path, data, options))
   }
 
-  FurnaceRecipe = (path: string, tags: TRecipeFurnaceTags[] | string, input: string, output?: string) => {
+  FurnaceRecipe = (path: string, tags: TRecipeFurnaceTags[] | string, input: TItemLike, output?: TItemLike) => {
     if (typeof tags === 'string') this.recipes.push(new FurnaceRecipeClass(path, input, output as string))
     else  this.recipes.push(new FurnaceRecipeClass(path, tags, input, output as string))
   }
 
-  SmokerRecipe = (path: string, input: string, output: string) => {
+  SmokerRecipe = (path: string, input: TItemLike, output: TItemLike) => {
     this.recipes.push(new SmokerRecipeClass(path, input, output))
   }
 
-  BlastFurnaceRecipe = (path: string, input: string, output: string) => {
+  BlastFurnaceRecipe = (path: string, input: TItemLike, output: TItemLike) => {
     this.recipes.push(new BlastFurnaceRecipeClass(path, input, output))
   }
 
-  CampfireRecipe = (path: string, input: string, output: string) => {
+  CampfireRecipe = (path: string, input: TItemLike, output: TItemLike) => {
     this.recipes.push(new CampfireRecipeClass(path, input, output))
   }
 
@@ -416,6 +419,10 @@ export default class AddonPack {
 
   ShapedRecipe = (path: string, pattern: string[], keys: Record<string, string>, result: string, priority = 0) => {
     this.recipes.push(new ShapedRecipeClass(path, pattern, keys, result, priority))
+  }
+
+  PotionRecipe = (path: string, input: string, reagent: string, output: string) => {
+    this.recipes.push(new PotionRecipeClass(path, input, reagent, output))
   }
 
   Block = (path: string, isExperimental: boolean, registerToCreativeMenu: boolean, components: IBlockComponents, textures: IBlockTextures, sound = 'stone', blockshape?: TBlockShape) => {

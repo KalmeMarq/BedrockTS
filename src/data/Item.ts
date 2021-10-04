@@ -1,548 +1,65 @@
-import { TBlockShape } from '..'
-import AddonPack, { Registry } from '../addon'
-import { getFromRegex, JsonArray, JsonObject } from '../utils'
-  
-
-export interface IBlockComponents {
-  loot?: string
-  destroy_time?: number
-  explosion_resistance?: number
-  friction?: number
-  flammable?: {
-    flame_odds: number
-    burn_odds: number
-  }
-  map_color?: string
-  block_light_absorption?: number
-  block_light_emission?: number,
-
-  // Exp
-
-  unit_cube?: boolean
-  crafting_table?: {
-    custom_description: string
-		grid_size: number,
-		crafting_tags: string[]
-  }
-  entity_collision?: boolean | {
-    origin: [number, number, number]
-		size: [number, number, number]
-  }
-  pick_collision?: boolean | {
-    origin: [number, number, number]
-		size: [number, number, number]
-  }
-  breakonpush?: boolean
-  display_name?: string
-  breathability?: 'solid' | 'air'
-  immovable?: boolean
-  onlypistonpush?: boolean
-  preventsjumping?: boolean
-  rotation?: [number, number, number]
-  unwalkable?: boolean
-}
-
-const expComponents = [
-  'unit_cube', 
-  'crafting_table', 
-  'entity_collision', 
-  'entity_collision', 
-  'pick_collision', 
-  'breakonpush',
-  'display_name',
-  'breathability',
-  'immovable',
-  'onlypistonpush',
-  'preventsjumping',
-  'rotation',
-  'unwalkable'
-]
-
-export type IBlockTexturesFull = {
-  up: string
-  down: string
-  side?: string
-  north?: string
-  south?: string
-  west?: string
-  east?: string
-}
-
-export type IBlockTextures = string | IBlockTexturesFull
-
-export class BlockClass {
-  public id: string
-  public path: string
-  private isExperimental: boolean
-  private inCreativeMenu: boolean
-  private components: IBlockComponents
-  private textures: IBlockTextures
-  private sound: string
-  private blockshape: TBlockShape | undefined
-
-  public constructor(path: string, isExperimental: boolean, registerToCreativeMenu: boolean, components: IBlockComponents, textures: IBlockTextures, sound = 'stone', blockshape?: TBlockShape) {
-    this.path = path
-    this.id = getFromRegex(path, /[^/]+$/)[0] ?? 'unknown'
-
-    this.isExperimental = isExperimental
-    this.inCreativeMenu = registerToCreativeMenu
-    this.components = components
-    this.textures = textures
-    this.sound = sound
-    this.blockshape = blockshape
-  }
-
-  public serializeServerData(block: JsonObject) {
-    block.addProperty('format_version', '1.12')
-
-    const mcblock = new JsonObject()
-
-    const desc = new JsonObject()
-    desc.addProperty('identifier', AddonPack.namespace + ':' + this.id)
-    desc.addProperty('is_experimental', this.isExperimental)
-    desc.addProperty('register_to_creative_menu', this.inCreativeMenu)
-    mcblock.add('description', desc)
-
-    const components = new JsonObject()
-    Object.entries(this.components).forEach(([key, value]) => {
-      if ((!this.isExperimental && !expComponents.includes(key)) || (this.isExperimental)) {
-        if (typeof value === 'object') {
-          if (Array.isArray(value)) {
-            const arr = new JsonArray()
-            value.forEach(v => {
-              arr.add(v)
-            })
-            components.add('minecraft:' + key, arr)
-          } else {
-            const obj = new JsonObject()
-            Object.entries<any>(value).forEach(([k, v]) => {
-              obj.addProperty(k, v)
-            })
-            components.add('minecraft:' + key, obj)
-          }
-        } else {
-          components.addProperty('minecraft:' + key, value)
-        }
-      }
-    })
-
-    mcblock.add('components', components)
-    block.add('minecraft:block', mcblock)
-  }
-
-  public serializeClientData(blocks: JsonObject) {
-    const block = new JsonObject()
-
-    if (this.blockshape) {
-      block.addProperty('blockshape', this.blockshape)
-    }
-
-    if (typeof this.textures === 'string') {
-      block.addProperty('textures', this.textures)
-    } else {
-      const textures = new JsonObject()
-      
-      textures.addProperty('up', this.textures.up)
-      textures.addProperty('down', this.textures.down)
-    
-      if (this.textures.side) {
-        textures.addProperty('side', this.textures.side)
-      } else if (this.textures.north && this.textures.east && this.textures.south && this.textures.west) {
-        textures.addProperty('north', this.textures.north)
-        textures.addProperty('south', this.textures.south)
-        textures.addProperty('east', this.textures.east)
-        textures.addProperty('west', this.textures.west)
-      } else {
-        textures.addProperty('side', this.textures.up)
-      }
-
-      block.add('textures', textures)
-    }
-
-    block.addProperty('sound', this.sound)
-
-    blocks.add(AddonPack.namespace + ':' + this.id, block)
-  }
-}
-
-class Component<T> {
-  public name: string
-  public value: T | undefined
-
-  public constructor(name: string, defaultValue?: T) {
-    this.name = name
-    this.value = defaultValue
-  }
-
-  public serialize(obj: JsonObject) {
-    if (this.value instanceof JsonObject || this.value instanceof JsonArray) {
-      obj.add(this.name, this.value)
-    } else {
-      if (this.value) obj.addProperty(this.name, this.value as any)
-    }
-  }
-}
-
-export class BlockProperties {
-  public _mapColor = new Component<string>('minecraft:map_color')
-  public _destroyTime = new Component<number>('minecraft:destroy_time')
-  public _friction = new Component<number>('minecraft:friction')
-  public _explosionResistance = new Component<number>('minecraft:explosion_resistance')
-  public _drops = new Component<string>('minecraft:loot')
-  public _light_emission = new Component<number>('minecraft:block_light_emission')
-  public _light_absorption = new Component<number>('minecraft:block_light_absorption')
-  public _breakOnPush = new Component<boolean>('minecraft:breakonpush')
-  public _breathability = new Component<'solid' | 'air'>('minecraft:breathability')
-  public _immovable = new Component<boolean>('minecraft:immovable')
-  public _onlyPistonPush = new Component<boolean>('minecraft:onlypistonpush')
-  public _preventsJumping = new Component<boolean>('minecraft:preventsjumping')
-  public _flammable = new Component<JsonObject<{ flame_odds: number, burn_odds: number }>>('minecraft:flammable')
-  public _rotation = new Component<JsonArray<number>>('minecraft:rotation')
-  public _unwalkable = new Component<boolean>('minecraft:unwalkable')
-  public _unit_cube = new Component<boolean>('minecraft:unit_cube')
-
-  public unitCube() {
-    this._unit_cube.value = true
-    return this
-  }
-
-  public unwalkable() {
-    this._unwalkable.value = true
-    return this
-  }
-
-  public rotation(x: number, y: number, z: number) {
-    const obj = new JsonArray<number>()
-    obj.add(x)
-    obj.add(y)
-    obj.add(z)
-    this._rotation.value = obj
-    return this
-  }
-  
-  public flammable(flameOdds: number, burnOdds: number) {
-    const obj = new JsonObject<{ flame_odds: number, burn_odds: number }>()
-    obj.addProperty('flame_odds', flameOdds)
-    obj.addProperty('burn_odds', burnOdds)
-    this._flammable.value = obj
-    return this
-  }
-
-  public breakOnPush() {
-    this._breakOnPush.value = true
-    return this
-  }
-
-  public breathability(value: 'solid' | 'air') {
-    this._breathability.value = value
-    return this
-  }
-
-  public immovable() {
-    this._immovable.value = true
-    return this
-  }
-
-  public onlyPistonPush() {
-    this._onlyPistonPush.value = true
-    return this
-  }
-
-  public preventsJump() {
-    this._preventsJumping.value = true
-    return this
-  }
-  
-  public drops(drops: string): BlockProperties {
-    this._drops.value = drops
-    return this
-  }
-
-  public destroyTime(time: number): BlockProperties {
-    this._destroyTime.value = time
-    return this
-  }
-
-  public explosionResistance(resis: number): BlockProperties {
-    this._explosionResistance.value = resis
-    return this
-  }
-
-  public strength(strength: number): BlockProperties
-  public strength(destroyTime: number, resistance: number): BlockProperties
-  public strength(destroyTime: number, resistance?: number): BlockProperties {
-    return this.destroyTime(destroyTime).explosionResistance(resistance ?? destroyTime)
-  }
-
-  public mapColor(color: number | string | [number, number, number]): BlockProperties {
-    if ((color as string).startsWith('#')) {
-      this._mapColor.value = color as string
-    }
-    return this
-  }
-
-  public lightLevel(level: number) {
-    this._light_emission.value = level
-    return this
-  }
-
-  public lightAbsorption(level: number) {
-    this._light_absorption.value = level
-    return this
-  }
-
-  public light(absorption: number, emission: number): BlockProperties {
-    return this.lightLevel(absorption).lightAbsorption(emission)
-  }
-}
-
-export class CollisionBox {
-  private constructor() {
-  }
-
-  public static create(width: number, height: number, depth: number, originX: number, originY: number, originZ: number) {
-    const obj = new JsonObject<{ origins: [number, number, number], size: [number, number, number] }>()
-    const origins = new JsonArray()
-    origins.add(originX)
-    origins.add(originY)
-    origins.add(originZ)
-    const size = new JsonArray()
-    size.add(width)
-    size.add(height)
-    size.add(depth)
-    obj.add('origins', origins)
-    obj.add('size', size)
-    return obj
-  }
-}
-
-export type TBox = JsonObject<{ origins: [number, number, number], size: [number, number, number] }> | false
-
-export type TBEvent = JsonObject<{
-  condition: string;
-  event: string;
-  target: string;
-}> | undefined
-
-export class BEvent {
-  private constructor() {
-  }
-
-  public static create(event: string, condition: string) {
-    const obj = new JsonObject<{ condition: string, event: string, target: string }>()
-    obj.addProperty('target', 'self')
-    obj.addProperty('event', event)
-    obj.addProperty('condition', condition)
-    
-    return obj
-  }
-}
-
-export class MCBlock {
-  public path: string
-  public id: string
-
-  public destroyTime: Component<number>
-  public friction: Component<number>
-  public explosionResistance: Component<number>
-  public drops: Component<string>
-  public properties: BlockProperties
-
-  public constructor(path: string, properties: BlockProperties) {
-    this.path = path
-    this.id = getFromRegex(path, /[^/]+$/)[0] ?? 'unknown'
-
-    this.destroyTime = properties._destroyTime
-    this.explosionResistance = properties._explosionResistance
-    this.friction = properties._friction
-    this.drops = properties._drops
-    this.properties = properties
-  }
-
-  public customProperties = {
-  }
-
-  public isExperimental(): boolean {
-    return false
-  }
-
-  public registerToCreativeMenu(): boolean {
-    return true
-  }
-
-  public getPickCollision(): TBox {
-    return false
-  }
-
-  public getEntityCollision(): TBox {
-    return false
-  }
-
-  public playSound(): undefined | string {
-    return undefined
-  }
-
-  public onPlaced(event: TEventGetter): void {
-  }
-
-  public onInteract(event: TEventGetter): void {
-  }
-
-  public onStepOn(event: TEventGetter): void {
-  }
-
-  public onStepOff(event: TEventGetter): void {
-  }
-
-  public onFallOn(event: TEventGetter): void {
-  }
-
-  public onPlayerPlacing(event: TEventGetter): void {
-  }
-
-  public onPlayerDestroyed(event: TEventGetter): void {
-  }
-
-  public serializeServerData(block: JsonObject): void {
-    block.addProperty('format_version', '1.12')
-
-    const mcblock = new JsonObject()
-
-    const desc = new JsonObject()
-    desc.addProperty('identifier', AddonPack.namespace + ':' + this.id)
-    desc.addProperty('is_experimental', this.isExperimental())
-    desc.addProperty('register_to_creative_menu', this.registerToCreativeMenu())
-    
-    if (Object.keys(this.customProperties).length > 0) {
-      const props = new JsonObject()
-
-      Object.entries<any[] | string>(this.customProperties).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-          const arr = new JsonArray()
-          value.forEach(v => arr.add(v))
-          props.add(AddonPack.namespace + ':' + key, arr)
-        } else {
-          props.addProperty(AddonPack.namespace + ':' + key, value)
-        }
-      })
-
-      desc.add('properties', props)
-    }
-
-    mcblock.add('description', desc)
-
-
-    const components = new JsonObject()
-
-    this.destroyTime.serialize(components)
-    this.explosionResistance.serialize(components)
-    this.friction.serialize(components)
-    this.drops.serialize(components)
-    this.properties._light_absorption.serialize(components)
-    this.properties._light_emission.serialize(components)
-    this.properties._mapColor.serialize(components)
-    this.properties._breakOnPush.serialize(components)
-    this.properties._breathability.serialize(components)
-    this.properties._immovable.serialize(components)
-    this.properties._onlyPistonPush.serialize(components)
-    this.properties._preventsJumping.serialize(components)
-    this.properties._flammable.serialize(components)
-
-    const pickCol = this.getPickCollision()
-    const entCol = this.getEntityCollision()
-
-    if (pickCol) {
-      components.add('minecraft:pick_collision', pickCol)
-    }
-
-    if (entCol) {
-      components.add('minecraft:entity_collision', entCol)
-    }
-
-    this.onPlaced((s: TBEvent) => {
-      if(s) components.add('minecraft:on_placed', s)
-    })
-
-    this.onFallOn((s: TBEvent) => {
-      if(s) components.add('minecraft:on_fall_on', s)
-    })
-
-    this.onInteract((s: TBEvent) => {
-      if(s) components.add('minecraft:on_interact', s)
-    })
-
-    this.onPlayerDestroyed((s: TBEvent) => {
-      if(s) components.add('minecraft:on_player_destroyed', s)
-    })
-
-    this.onPlayerPlacing((s: TBEvent) => {
-      if(s) components.add('minecraft:on_player_placing', s)
-    })
-
-    this.onStepOff((s: TBEvent) => {
-      if(s) components.add('minecraft:on_step_off', s)
-    })
-
-    this.onStepOn((s: TBEvent) => {
-      if(s) components.add('minecraft:on_step_on', s)
-    })
-
-    mcblock.add('components', components)
-
-    block.add('minecraft:block', mcblock)
-  }
-
-  public serializeClientData(blocks: JsonObject): void {
-  }
-
-  public register(registry: Registry<MCBlock>) {
-    registry.register(this)
-  }
-}
-
-export type TEventGetter = (ev: TBEvent) => void
-
-export enum Blocks {
+export enum Items {
+  ACACIA_BOAT = 'minecraft:acacia_boat',
   ACACIA_BUTTON = 'minecraft:acacia_button',
   ACACIA_DOOR = 'minecraft:acacia_door',
   ACACIA_FENCE_GATE = 'minecraft:acacia_fence_gate',
   ACACIA_PRESSURE_PLATE = 'minecraft:acacia_pressure_plate',
+  ACACIA_SIGN = 'minecraft:acacia_sign',
   ACACIA_STAIRS = 'minecraft:acacia_stairs',
   ACACIA_STANDING_SIGN = 'minecraft:acacia_standing_sign',
   ACACIA_TRAPDOOR = 'minecraft:acacia_trapdoor',
   ACACIA_WALL_SIGN = 'minecraft:acacia_wall_sign',
   ACTIVATOR_RAIL = 'minecraft:activator_rail',
+  AGENT_SPAWN_EGG = 'minecraft:agent_spawn_egg',
   AIR = 'minecraft:air',
   ALLOW = 'minecraft:allow',
   AMETHYST_BLOCK = 'minecraft:amethyst_block',
   AMETHYST_CLUSTER = 'minecraft:amethyst_cluster',
+  AMETHYST_SHARD = 'minecraft:amethyst_shard',
   ANCIENT_DEBRIS = 'minecraft:ancient_debris',
   ANDESITE_STAIRS = 'minecraft:andesite_stairs',
   ANVIL = 'minecraft:anvil',
+  APPLE = 'minecraft:apple',
+  ARMOR_STAND = 'minecraft:armor_stand',
+  ARROW = 'minecraft:arrow',
+  AXOLOTL_BUCKET = 'minecraft:axolotl_bucket',
+  AXOLOTL_SPAWN_EGG = 'minecraft:axolotl_spawn_egg',
   AZALEA = 'minecraft:azalea',
   AZALEA_LEAVES = 'minecraft:azalea_leaves',
   AZALEA_LEAVES_FLOWERED = 'minecraft:azalea_leaves_flowered',
+  BAKED_POTATO = 'minecraft:baked_potato',
+  BALLOON = 'minecraft:balloon',
   BAMBOO = 'minecraft:bamboo',
   BAMBOO_SAPLING = 'minecraft:bamboo_sapling',
+  BANNER = 'minecraft:banner',
+  BANNER_PATTERN = 'minecraft:banner_pattern',
   BARREL = 'minecraft:barrel',
   BARRIER = 'minecraft:barrier',
   BASALT = 'minecraft:basalt',
+  BAT_SPAWN_EGG = 'minecraft:bat_spawn_egg',
   BEACON = 'minecraft:beacon',
   BED = 'minecraft:bed',
   BEDROCK = 'minecraft:bedrock',
   BEE_NEST = 'minecraft:bee_nest',
+  BEE_SPAWN_EGG = 'minecraft:bee_spawn_egg',
+  BEEF = 'minecraft:beef',
   BEEHIVE = 'minecraft:beehive',
   BEETROOT = 'minecraft:beetroot',
+  BEETROOT_SEEDS = 'minecraft:beetroot_seeds',
+  BEETROOT_SOUP = 'minecraft:beetroot_soup',
   BELL = 'minecraft:bell',
   BIG_DRIPLEAF = 'minecraft:big_dripleaf',
+  BIRCH_BOAT = 'minecraft:birch_boat',
   BIRCH_BUTTON = 'minecraft:birch_button',
   BIRCH_DOOR = 'minecraft:birch_door',
   BIRCH_FENCE_GATE = 'minecraft:birch_fence_gate',
   BIRCH_PRESSURE_PLATE = 'minecraft:birch_pressure_plate',
+  BIRCH_SIGN = 'minecraft:birch_sign',
   BIRCH_STAIRS = 'minecraft:birch_stairs',
   BIRCH_STANDING_SIGN = 'minecraft:birch_standing_sign',
   BIRCH_TRAPDOOR = 'minecraft:birch_trapdoor',
   BIRCH_WALL_SIGN = 'minecraft:birch_wall_sign',
+  BLACK_DYE = 'minecraft:black_dye',
   BLACK_GLAZED_TERRACOTTA = 'minecraft:black_glazed_terracotta',
   BLACKSTONE = 'minecraft:blackstone',
   BLACKSTONE_DOUBLE_SLAB = 'minecraft:blackstone_double_slab',
@@ -550,18 +67,35 @@ export enum Blocks {
   BLACKSTONE_STAIRS = 'minecraft:blackstone_stairs',
   BLACKSTONE_WALL = 'minecraft:blackstone_wall',
   BLAST_FURNACE = 'minecraft:blast_furnace',
+  BLAZE_POWDER = 'minecraft:blaze_powder',
+  BLAZE_ROD = 'minecraft:blaze_rod',
+  BLAZE_SPAWN_EGG = 'minecraft:blaze_spawn_egg',
+  BLEACH = 'minecraft:bleach',
+  BLUE_DYE = 'minecraft:blue_dye',
   BLUE_GLAZED_TERRACOTTA = 'minecraft:blue_glazed_terracotta',
   BLUE_ICE = 'minecraft:blue_ice',
+  BOAT = 'minecraft:boat',
+  BONE = 'minecraft:bone',
   BONE_BLOCK = 'minecraft:bone_block',
+  BONE_MEAL = 'minecraft:bone_meal',
+  BOOK = 'minecraft:book',
   BOOKSHELF = 'minecraft:bookshelf',
   BORDER_BLOCK = 'minecraft:border_block',
+  BORDURE_INDENTED_BANNER_PATTERN = 'minecraft:bordure_indented_banner_pattern',
+  BOW = 'minecraft:bow',
+  BOWL = 'minecraft:bowl',
+  BREAD = 'minecraft:bread',
   BREWING_STAND = 'minecraft:brewing_stand',
+  BREWINGSTANDBLOCK = 'minecraft:brewingstandblock',
+  BRICK = 'minecraft:brick',
   BRICK_BLOCK = 'minecraft:brick_block',
   BRICK_STAIRS = 'minecraft:brick_stairs',
+  BROWN_DYE = 'minecraft:brown_dye',
   BROWN_GLAZED_TERRACOTTA = 'minecraft:brown_glazed_terracotta',
   BROWN_MUSHROOM = 'minecraft:brown_mushroom',
   BROWN_MUSHROOM_BLOCK = 'minecraft:brown_mushroom_block',
   BUBBLE_COLUMN = 'minecraft:bubble_column',
+  BUCKET = 'minecraft:bucket',
   BUDDING_AMETHYST = 'minecraft:budding_amethyst',
   CACTUS = 'minecraft:cactus',
   CAKE = 'minecraft:cake',
@@ -569,24 +103,40 @@ export enum Blocks {
   CAMERA = 'minecraft:camera',
   CAMPFIRE = 'minecraft:campfire',
   CARPET = 'minecraft:carpet',
+  CARROT = 'minecraft:carrot',
+  CARROT_ON_A_STICK = 'minecraft:carrot_on_a_stick',
   CARROTS = 'minecraft:carrots',
   CARTOGRAPHY_TABLE = 'minecraft:cartography_table',
   CARVED_PUMPKIN = 'minecraft:carved_pumpkin',
+  CAT_SPAWN_EGG = 'minecraft:cat_spawn_egg',
   CAULDRON = 'minecraft:cauldron',
+  CAVE_SPIDER_SPAWN_EGG = 'minecraft:cave_spider_spawn_egg',
   CAVE_VINES = 'minecraft:cave_vines',
   CAVE_VINES_BODY_WITH_BERRIES = 'minecraft:cave_vines_body_with_berries',
   CAVE_VINES_HEAD_WITH_BERRIES = 'minecraft:cave_vines_head_with_berries',
   CHAIN = 'minecraft:chain',
   CHAIN_COMMAND_BLOCK = 'minecraft:chain_command_block',
+  CHAINMAIL_BOOTS = 'minecraft:chainmail_boots',
+  CHAINMAIL_CHESTPLATE = 'minecraft:chainmail_chestplate',
+  CHAINMAIL_HELMET = 'minecraft:chainmail_helmet',
+  CHAINMAIL_LEGGINGS = 'minecraft:chainmail_leggings',
+  CHARCOAL = 'minecraft:charcoal',
   CHEMICAL_HEAT = 'minecraft:chemical_heat',
   CHEMISTRY_TABLE = 'minecraft:chemistry_table',
   CHEST = 'minecraft:chest',
+  CHEST_MINECART = 'minecraft:chest_minecart',
+  CHICKEN = 'minecraft:chicken',
+  CHICKEN_SPAWN_EGG = 'minecraft:chicken_spawn_egg',
   CHISELED_DEEPSLATE = 'minecraft:chiseled_deepslate',
   CHISELED_NETHER_BRICKS = 'minecraft:chiseled_nether_bricks',
   CHISELED_POLISHED_BLACKSTONE = 'minecraft:chiseled_polished_blackstone',
   CHORUS_FLOWER = 'minecraft:chorus_flower',
+  CHORUS_FRUIT = 'minecraft:chorus_fruit',
   CHORUS_PLANT = 'minecraft:chorus_plant',
   CLAY = 'minecraft:clay',
+  CLAY_BALL = 'minecraft:clay_ball',
+  CLOCK = 'minecraft:clock',
+  COAL = 'minecraft:coal',
   COAL_BLOCK = 'minecraft:coal_block',
   COAL_ORE = 'minecraft:coal_ore',
   COBBLED_DEEPSLATE = 'minecraft:cobbled_deepslate',
@@ -597,14 +147,31 @@ export enum Blocks {
   COBBLESTONE = 'minecraft:cobblestone',
   COBBLESTONE_WALL = 'minecraft:cobblestone_wall',
   COCOA = 'minecraft:cocoa',
+  COCOA_BEANS = 'minecraft:cocoa_beans',
+  COD = 'minecraft:cod',
+  COD_BUCKET = 'minecraft:cod_bucket',
+  COD_SPAWN_EGG = 'minecraft:cod_spawn_egg',
   COLORED_TORCH_BP = 'minecraft:colored_torch_bp',
   COLORED_TORCH_RG = 'minecraft:colored_torch_rg',
   COMMAND_BLOCK = 'minecraft:command_block',
+  COMMAND_BLOCK_MINECART = 'minecraft:command_block_minecart',
+  COMPARATOR = 'minecraft:comparator',
+  COMPASS = 'minecraft:compass',
   COMPOSTER = 'minecraft:composter',
+  COMPOUND = 'minecraft:compound',
   CONCRETE = 'minecraft:concrete',
-  CONCRETEPOWDER = 'minecraft:concretePowder',
+  CONCRETE_POWDER = 'minecraft:concrete_powder',
   CONDUIT = 'minecraft:conduit',
+  COOKED_BEEF = 'minecraft:cooked_beef',
+  COOKED_CHICKEN = 'minecraft:cooked_chicken',
+  COOKED_COD = 'minecraft:cooked_cod',
+  COOKED_MUTTON = 'minecraft:cooked_mutton',
+  COOKED_PORKCHOP = 'minecraft:cooked_porkchop',
+  COOKED_RABBIT = 'minecraft:cooked_rabbit',
+  COOKED_SALMON = 'minecraft:cooked_salmon',
+  COOKIE = 'minecraft:cookie',
   COPPER_BLOCK = 'minecraft:copper_block',
+  COPPER_INGOT = 'minecraft:copper_ingot',
   COPPER_ORE = 'minecraft:copper_ore',
   CORAL = 'minecraft:coral',
   CORAL_BLOCK = 'minecraft:coral_block',
@@ -613,11 +180,14 @@ export enum Blocks {
   CORAL_FAN_HANG = 'minecraft:coral_fan_hang',
   CORAL_FAN_HANG2 = 'minecraft:coral_fan_hang2',
   CORAL_FAN_HANG3 = 'minecraft:coral_fan_hang3',
+  COW_SPAWN_EGG = 'minecraft:cow_spawn_egg',
   CRACKED_DEEPSLATE_BRICKS = 'minecraft:cracked_deepslate_bricks',
   CRACKED_DEEPSLATE_TILES = 'minecraft:cracked_deepslate_tiles',
   CRACKED_NETHER_BRICKS = 'minecraft:cracked_nether_bricks',
   CRACKED_POLISHED_BLACKSTONE_BRICKS = 'minecraft:cracked_polished_blackstone_bricks',
   CRAFTING_TABLE = 'minecraft:crafting_table',
+  CREEPER_BANNER_PATTERN = 'minecraft:creeper_banner_pattern',
+  CREEPER_SPAWN_EGG = 'minecraft:creeper_spawn_egg',
   CRIMSON_BUTTON = 'minecraft:crimson_button',
   CRIMSON_DOOR = 'minecraft:crimson_door',
   CRIMSON_DOUBLE_SLAB = 'minecraft:crimson_double_slab',
@@ -629,21 +199,26 @@ export enum Blocks {
   CRIMSON_PLANKS = 'minecraft:crimson_planks',
   CRIMSON_PRESSURE_PLATE = 'minecraft:crimson_pressure_plate',
   CRIMSON_ROOTS = 'minecraft:crimson_roots',
+  CRIMSON_SIGN = 'minecraft:crimson_sign',
   CRIMSON_SLAB = 'minecraft:crimson_slab',
   CRIMSON_STAIRS = 'minecraft:crimson_stairs',
   CRIMSON_STANDING_SIGN = 'minecraft:crimson_standing_sign',
   CRIMSON_STEM = 'minecraft:crimson_stem',
   CRIMSON_TRAPDOOR = 'minecraft:crimson_trapdoor',
   CRIMSON_WALL_SIGN = 'minecraft:crimson_wall_sign',
+  CROSSBOW = 'minecraft:crossbow',
   CRYING_OBSIDIAN = 'minecraft:crying_obsidian',
   CUT_COPPER = 'minecraft:cut_copper',
   CUT_COPPER_SLAB = 'minecraft:cut_copper_slab',
   CUT_COPPER_STAIRS = 'minecraft:cut_copper_stairs',
+  CYAN_DYE = 'minecraft:cyan_dye',
   CYAN_GLAZED_TERRACOTTA = 'minecraft:cyan_glazed_terracotta',
+  DARK_OAK_BOAT = 'minecraft:dark_oak_boat',
   DARK_OAK_BUTTON = 'minecraft:dark_oak_button',
   DARK_OAK_DOOR = 'minecraft:dark_oak_door',
   DARK_OAK_FENCE_GATE = 'minecraft:dark_oak_fence_gate',
   DARK_OAK_PRESSURE_PLATE = 'minecraft:dark_oak_pressure_plate',
+  DARK_OAK_SIGN = 'minecraft:dark_oak_sign',
   DARK_OAK_STAIRS = 'minecraft:dark_oak_stairs',
   DARK_OAK_TRAPDOOR = 'minecraft:dark_oak_trapdoor',
   DARK_PRISMARINE_STAIRS = 'minecraft:dark_prismarine_stairs',
@@ -652,6 +227,7 @@ export enum Blocks {
   DAYLIGHT_DETECTOR = 'minecraft:daylight_detector',
   DAYLIGHT_DETECTOR_INVERTED = 'minecraft:daylight_detector_inverted',
   DEADBUSH = 'minecraft:deadbush',
+  DEBUG_STICK = 'minecraft:debug_stick',
   DEEPSLATE = 'minecraft:deepslate',
   DEEPSLATE_BRICK_DOUBLE_SLAB = 'minecraft:deepslate_brick_double_slab',
   DEEPSLATE_BRICK_SLAB = 'minecraft:deepslate_brick_slab',
@@ -673,12 +249,25 @@ export enum Blocks {
   DEEPSLATE_TILES = 'minecraft:deepslate_tiles',
   DENY = 'minecraft:deny',
   DETECTOR_RAIL = 'minecraft:detector_rail',
+  DIAMOND = 'minecraft:diamond',
+  DIAMOND_AXE = 'minecraft:diamond_axe',
   DIAMOND_BLOCK = 'minecraft:diamond_block',
+  DIAMOND_BOOTS = 'minecraft:diamond_boots',
+  DIAMOND_CHESTPLATE = 'minecraft:diamond_chestplate',
+  DIAMOND_HELMET = 'minecraft:diamond_helmet',
+  DIAMOND_HOE = 'minecraft:diamond_hoe',
+  DIAMOND_HORSE_ARMOR = 'minecraft:diamond_horse_armor',
+  DIAMOND_LEGGINGS = 'minecraft:diamond_leggings',
   DIAMOND_ORE = 'minecraft:diamond_ore',
+  DIAMOND_PICKAXE = 'minecraft:diamond_pickaxe',
+  DIAMOND_SHOVEL = 'minecraft:diamond_shovel',
+  DIAMOND_SWORD = 'minecraft:diamond_sword',
   DIORITE_STAIRS = 'minecraft:diorite_stairs',
   DIRT = 'minecraft:dirt',
   DIRT_WITH_ROOTS = 'minecraft:dirt_with_roots',
   DISPENSER = 'minecraft:dispenser',
+  DOLPHIN_SPAWN_EGG = 'minecraft:dolphin_spawn_egg',
+  DONKEY_SPAWN_EGG = 'minecraft:donkey_spawn_egg',
   DOUBLE_CUT_COPPER_SLAB = 'minecraft:double_cut_copper_slab',
   DOUBLE_PLANT = 'minecraft:double_plant',
   DOUBLE_STONE_SLAB = 'minecraft:double_stone_slab',
@@ -686,10 +275,16 @@ export enum Blocks {
   DOUBLE_STONE_SLAB3 = 'minecraft:double_stone_slab3',
   DOUBLE_STONE_SLAB4 = 'minecraft:double_stone_slab4',
   DOUBLE_WOODEN_SLAB = 'minecraft:double_wooden_slab',
+  DRAGON_BREATH = 'minecraft:dragon_breath',
   DRAGON_EGG = 'minecraft:dragon_egg',
+  DRIED_KELP = 'minecraft:dried_kelp',
   DRIED_KELP_BLOCK = 'minecraft:dried_kelp_block',
   DRIPSTONE_BLOCK = 'minecraft:dripstone_block',
   DROPPER = 'minecraft:dropper',
+  DROWNED_SPAWN_EGG = 'minecraft:drowned_spawn_egg',
+  DYE = 'minecraft:dye',
+  EGG = 'minecraft:egg',
+  ELDER_GUARDIAN_SPAWN_EGG = 'minecraft:elder_guardian_spawn_egg',
   ELEMENT_0 = 'minecraft:element_0',
   ELEMENT_1 = 'minecraft:element_1',
   ELEMENT_10 = 'minecraft:element_10',
@@ -809,51 +404,103 @@ export enum Blocks {
   ELEMENT_97 = 'minecraft:element_97',
   ELEMENT_98 = 'minecraft:element_98',
   ELEMENT_99 = 'minecraft:element_99',
+  ELYTRA = 'minecraft:elytra',
+  EMERALD = 'minecraft:emerald',
   EMERALD_BLOCK = 'minecraft:emerald_block',
   EMERALD_ORE = 'minecraft:emerald_ore',
+  EMPTY_MAP = 'minecraft:empty_map',
+  ENCHANTED_BOOK = 'minecraft:enchanted_book',
+  ENCHANTED_GOLDEN_APPLE = 'minecraft:enchanted_golden_apple',
   ENCHANTING_TABLE = 'minecraft:enchanting_table',
   END_BRICK_STAIRS = 'minecraft:end_brick_stairs',
   END_BRICKS = 'minecraft:end_bricks',
+  END_CRYSTAL = 'minecraft:end_crystal',
   END_GATEWAY = 'minecraft:end_gateway',
   END_PORTAL = 'minecraft:end_portal',
   END_PORTAL_FRAME = 'minecraft:end_portal_frame',
   END_ROD = 'minecraft:end_rod',
   END_STONE = 'minecraft:end_stone',
   ENDER_CHEST = 'minecraft:ender_chest',
+  ENDER_EYE = 'minecraft:ender_eye',
+  ENDER_PEARL = 'minecraft:ender_pearl',
+  ENDERMAN_SPAWN_EGG = 'minecraft:enderman_spawn_egg',
+  ENDERMITE_SPAWN_EGG = 'minecraft:endermite_spawn_egg',
+  EVOKER_SPAWN_EGG = 'minecraft:evoker_spawn_egg',
+  EXPERIENCE_BOTTLE = 'minecraft:experience_bottle',
   EXPOSED_COPPER = 'minecraft:exposed_copper',
   EXPOSED_CUT_COPPER = 'minecraft:exposed_cut_copper',
   EXPOSED_CUT_COPPER_SLAB = 'minecraft:exposed_cut_copper_slab',
   EXPOSED_CUT_COPPER_STAIRS = 'minecraft:exposed_cut_copper_stairs',
   EXPOSED_DOUBLE_CUT_COPPER_SLAB = 'minecraft:exposed_double_cut_copper_slab',
   FARMLAND = 'minecraft:farmland',
+  FEATHER = 'minecraft:feather',
   FENCE = 'minecraft:fence',
   FENCE_GATE = 'minecraft:fence_gate',
+  FERMENTED_SPIDER_EYE = 'minecraft:fermented_spider_eye',
+  FIELD_MASONED_BANNER_PATTERN = 'minecraft:field_masoned_banner_pattern',
+  FILLED_MAP = 'minecraft:filled_map',
   FIRE = 'minecraft:fire',
+  FIRE_CHARGE = 'minecraft:fire_charge',
+  FIREWORK_ROCKET = 'minecraft:firework_rocket',
+  FIREWORK_STAR = 'minecraft:firework_star',
+  FISHING_ROD = 'minecraft:fishing_rod',
   FLETCHING_TABLE = 'minecraft:fletching_table',
+  FLINT = 'minecraft:flint',
+  FLINT_AND_STEEL = 'minecraft:flint_and_steel',
+  FLOWER_BANNER_PATTERN = 'minecraft:flower_banner_pattern',
   FLOWER_POT = 'minecraft:flower_pot',
   FLOWERING_AZALEA = 'minecraft:flowering_azalea',
   FLOWING_LAVA = 'minecraft:flowing_lava',
   FLOWING_WATER = 'minecraft:flowing_water',
+  FOX_SPAWN_EGG = 'minecraft:fox_spawn_egg',
   FRAME = 'minecraft:frame',
   FROSTED_ICE = 'minecraft:frosted_ice',
   FURNACE = 'minecraft:furnace',
+  GHAST_SPAWN_EGG = 'minecraft:ghast_spawn_egg',
+  GHAST_TEAR = 'minecraft:ghast_tear',
   GILDED_BLACKSTONE = 'minecraft:gilded_blackstone',
   GLASS = 'minecraft:glass',
+  GLASS_BOTTLE = 'minecraft:glass_bottle',
   GLASS_PANE = 'minecraft:glass_pane',
+  GLISTERING_MELON_SLICE = 'minecraft:glistering_melon_slice',
   GLOW_FRAME = 'minecraft:glow_frame',
+  GLOW_INK_SAC = 'minecraft:glow_ink_sac',
   GLOW_LICHEN = 'minecraft:glow_lichen',
+  GLOW_SQUID_SPAWN_EGG = 'minecraft:glow_squid_spawn_egg',
+  GLOW_STICK = 'minecraft:glow_stick',
   GLOWINGOBSIDIAN = 'minecraft:glowingobsidian',
   GLOWSTONE = 'minecraft:glowstone',
+  GLOWSTONE_DUST = 'minecraft:glowstone_dust',
+  GOAT_HORN = 'minecraft:goat_horn',
+  GOAT_SPAWN_EGG = 'minecraft:goat_spawn_egg',
   GOLD_BLOCK = 'minecraft:gold_block',
+  GOLD_INGOT = 'minecraft:gold_ingot',
+  GOLD_NUGGET = 'minecraft:gold_nugget',
   GOLD_ORE = 'minecraft:gold_ore',
+  GOLDEN_APPLE = 'minecraft:golden_apple',
+  GOLDEN_AXE = 'minecraft:golden_axe',
+  GOLDEN_BOOTS = 'minecraft:golden_boots',
+  GOLDEN_CARROT = 'minecraft:golden_carrot',
+  GOLDEN_CHESTPLATE = 'minecraft:golden_chestplate',
+  GOLDEN_HELMET = 'minecraft:golden_helmet',
+  GOLDEN_HOE = 'minecraft:golden_hoe',
+  GOLDEN_HORSE_ARMOR = 'minecraft:golden_horse_armor',
+  GOLDEN_LEGGINGS = 'minecraft:golden_leggings',
+  GOLDEN_PICKAXE = 'minecraft:golden_pickaxe',
   GOLDEN_RAIL = 'minecraft:golden_rail',
+  GOLDEN_SHOVEL = 'minecraft:golden_shovel',
+  GOLDEN_SWORD = 'minecraft:golden_sword',
   GRANITE_STAIRS = 'minecraft:granite_stairs',
   GRASS = 'minecraft:grass',
   GRASS_PATH = 'minecraft:grass_path',
   GRAVEL = 'minecraft:gravel',
+  GRAY_DYE = 'minecraft:gray_dye',
   GRAY_GLAZED_TERRACOTTA = 'minecraft:gray_glazed_terracotta',
+  GREEN_DYE = 'minecraft:green_dye',
   GREEN_GLAZED_TERRACOTTA = 'minecraft:green_glazed_terracotta',
   GRINDSTONE = 'minecraft:grindstone',
+  GUARDIAN_SPAWN_EGG = 'minecraft:guardian_spawn_egg',
+  GUNPOWDER = 'minecraft:gunpowder',
   HANGING_ROOTS = 'minecraft:hanging_roots',
   HARD_GLASS = 'minecraft:hard_glass',
   HARD_GLASS_PANE = 'minecraft:hard_glass_pane',
@@ -861,26 +508,76 @@ export enum Blocks {
   HARD_STAINED_GLASS_PANE = 'minecraft:hard_stained_glass_pane',
   HARDENED_CLAY = 'minecraft:hardened_clay',
   HAY_BLOCK = 'minecraft:hay_block',
+  HEART_OF_THE_SEA = 'minecraft:heart_of_the_sea',
   HEAVY_WEIGHTED_PRESSURE_PLATE = 'minecraft:heavy_weighted_pressure_plate',
+  HOGLIN_SPAWN_EGG = 'minecraft:hoglin_spawn_egg',
   HONEY_BLOCK = 'minecraft:honey_block',
+  HONEY_BOTTLE = 'minecraft:honey_bottle',
+  HONEYCOMB = 'minecraft:honeycomb',
   HONEYCOMB_BLOCK = 'minecraft:honeycomb_block',
   HOPPER = 'minecraft:hopper',
+  HOPPER_MINECART = 'minecraft:hopper_minecart',
+  HORSE_SPAWN_EGG = 'minecraft:horse_spawn_egg',
+  HUSK_SPAWN_EGG = 'minecraft:husk_spawn_egg',
   ICE = 'minecraft:ice',
+  ICE_BOMB = 'minecraft:ice_bomb',
   INFESTED_DEEPSLATE = 'minecraft:infested_deepslate',
   INFO_UPDATE = 'minecraft:info_update',
   INFO_UPDATE2 = 'minecraft:info_update2',
-  INVISIBLEBEDROCK = 'minecraft:invisibleBedrock',
+  INK_SAC = 'minecraft:ink_sac',
+  INVISIBLEBEDROCK = 'minecraft:invisiblebedrock',
+  IRON_AXE = 'minecraft:iron_axe',
   IRON_BARS = 'minecraft:iron_bars',
   IRON_BLOCK = 'minecraft:iron_block',
+  IRON_BOOTS = 'minecraft:iron_boots',
+  IRON_CHESTPLATE = 'minecraft:iron_chestplate',
   IRON_DOOR = 'minecraft:iron_door',
+  IRON_HELMET = 'minecraft:iron_helmet',
+  IRON_HOE = 'minecraft:iron_hoe',
+  IRON_HORSE_ARMOR = 'minecraft:iron_horse_armor',
+  IRON_INGOT = 'minecraft:iron_ingot',
+  IRON_LEGGINGS = 'minecraft:iron_leggings',
+  IRON_NUGGET = 'minecraft:iron_nugget',
   IRON_ORE = 'minecraft:iron_ore',
+  IRON_PICKAXE = 'minecraft:iron_pickaxe',
+  IRON_SHOVEL = 'minecraft:iron_shovel',
+  IRON_SWORD = 'minecraft:iron_sword',
   IRON_TRAPDOOR = 'minecraft:iron_trapdoor',
+  ITEM_ACACIA_DOOR = 'minecraft:item.acacia_door',
+  ITEM_BED = 'minecraft:item.bed',
+  ITEM_BEETROOT = 'minecraft:item.beetroot',
+  ITEM_BIRCH_DOOR = 'minecraft:item.birch_door',
+  ITEM_CAKE = 'minecraft:item.cake',
+  ITEM_CAMERA = 'minecraft:item.camera',
+  ITEM_CAMPFIRE = 'minecraft:item.campfire',
+  ITEM_CAULDRON = 'minecraft:item.cauldron',
+  ITEM_CHAIN = 'minecraft:item.chain',
+  ITEM_CRIMSON_DOOR = 'minecraft:item.crimson_door',
+  ITEM_DARK_OAK_DOOR = 'minecraft:item.dark_oak_door',
+  ITEM_FLOWER_POT = 'minecraft:item.flower_pot',
+  ITEM_FRAME = 'minecraft:item.frame',
+  ITEM_GLOW_FRAME = 'minecraft:item.glow_frame',
+  ITEM_HOPPER = 'minecraft:item.hopper',
+  ITEM_IRON_DOOR = 'minecraft:item.iron_door',
+  ITEM_JUNGLE_DOOR = 'minecraft:item.jungle_door',
+  ITEM_KELP = 'minecraft:item.kelp',
+  ITEM_NETHER_SPROUTS = 'minecraft:item.nether_sprouts',
+  ITEM_NETHER_WART = 'minecraft:item.nether_wart',
+  ITEM_REEDS = 'minecraft:item.reeds',
+  ITEM_SKULL = 'minecraft:item.skull',
+  ITEM_SOUL_CAMPFIRE = 'minecraft:item.soul_campfire',
+  ITEM_SPRUCE_DOOR = 'minecraft:item.spruce_door',
+  ITEM_WARPED_DOOR = 'minecraft:item.warped_door',
+  ITEM_WHEAT = 'minecraft:item.wheat',
+  ITEM_WOODEN_DOOR = 'minecraft:item.wooden_door',
   JIGSAW = 'minecraft:jigsaw',
   JUKEBOX = 'minecraft:jukebox',
+  JUNGLE_BOAT = 'minecraft:jungle_boat',
   JUNGLE_BUTTON = 'minecraft:jungle_button',
   JUNGLE_DOOR = 'minecraft:jungle_door',
   JUNGLE_FENCE_GATE = 'minecraft:jungle_fence_gate',
   JUNGLE_PRESSURE_PLATE = 'minecraft:jungle_pressure_plate',
+  JUNGLE_SIGN = 'minecraft:jungle_sign',
   JUNGLE_STAIRS = 'minecraft:jungle_stairs',
   JUNGLE_STANDING_SIGN = 'minecraft:jungle_standing_sign',
   JUNGLE_TRAPDOOR = 'minecraft:jungle_trapdoor',
@@ -889,19 +586,32 @@ export enum Blocks {
   LADDER = 'minecraft:ladder',
   LANTERN = 'minecraft:lantern',
   LAPIS_BLOCK = 'minecraft:lapis_block',
+  LAPIS_LAZULI = 'minecraft:lapis_lazuli',
   LAPIS_ORE = 'minecraft:lapis_ore',
   LARGE_AMETHYST_BUD = 'minecraft:large_amethyst_bud',
   LAVA = 'minecraft:lava',
+  LAVA_BUCKET = 'minecraft:lava_bucket',
   LAVA_CAULDRON = 'minecraft:lava_cauldron',
+  LEAD = 'minecraft:lead',
+  LEATHER = 'minecraft:leather',
+  LEATHER_BOOTS = 'minecraft:leather_boots',
+  LEATHER_CHESTPLATE = 'minecraft:leather_chestplate',
+  LEATHER_HELMET = 'minecraft:leather_helmet',
+  LEATHER_HORSE_ARMOR = 'minecraft:leather_horse_armor',
+  LEATHER_LEGGINGS = 'minecraft:leather_leggings',
   LEAVES = 'minecraft:leaves',
   LEAVES2 = 'minecraft:leaves2',
   LECTERN = 'minecraft:lectern',
   LEVER = 'minecraft:lever',
   LIGHT_BLOCK = 'minecraft:light_block',
+  LIGHT_BLUE_DYE = 'minecraft:light_blue_dye',
   LIGHT_BLUE_GLAZED_TERRACOTTA = 'minecraft:light_blue_glazed_terracotta',
+  LIGHT_GRAY_DYE = 'minecraft:light_gray_dye',
   LIGHT_WEIGHTED_PRESSURE_PLATE = 'minecraft:light_weighted_pressure_plate',
   LIGHTNING_ROD = 'minecraft:lightning_rod',
+  LIME_DYE = 'minecraft:lime_dye',
   LIME_GLAZED_TERRACOTTA = 'minecraft:lime_glazed_terracotta',
+  LINGERING_POTION = 'minecraft:lingering_potion',
   LIT_BLAST_FURNACE = 'minecraft:lit_blast_furnace',
   LIT_DEEPSLATE_REDSTONE_ORE = 'minecraft:lit_deepslate_redstone_ore',
   LIT_FURNACE = 'minecraft:lit_furnace',
@@ -909,39 +619,87 @@ export enum Blocks {
   LIT_REDSTONE_LAMP = 'minecraft:lit_redstone_lamp',
   LIT_REDSTONE_ORE = 'minecraft:lit_redstone_ore',
   LIT_SMOKER = 'minecraft:lit_smoker',
+  LLAMA_SPAWN_EGG = 'minecraft:llama_spawn_egg',
   LODESTONE = 'minecraft:lodestone',
+  LODESTONE_COMPASS = 'minecraft:lodestone_compass',
   LOG = 'minecraft:log',
   LOG2 = 'minecraft:log2',
   LOOM = 'minecraft:loom',
+  MAGENTA_DYE = 'minecraft:magenta_dye',
   MAGENTA_GLAZED_TERRACOTTA = 'minecraft:magenta_glazed_terracotta',
   MAGMA = 'minecraft:magma',
+  MAGMA_CREAM = 'minecraft:magma_cream',
+  MAGMA_CUBE_SPAWN_EGG = 'minecraft:magma_cube_spawn_egg',
+  MEDICINE = 'minecraft:medicine',
   MEDIUM_AMETHYST_BUD = 'minecraft:medium_amethyst_bud',
   MELON_BLOCK = 'minecraft:melon_block',
+  MELON_SEEDS = 'minecraft:melon_seeds',
+  MELON_SLICE = 'minecraft:melon_slice',
   MELON_STEM = 'minecraft:melon_stem',
+  MILK_BUCKET = 'minecraft:milk_bucket',
+  MINECART = 'minecraft:minecart',
   MOB_SPAWNER = 'minecraft:mob_spawner',
+  MOJANG_BANNER_PATTERN = 'minecraft:mojang_banner_pattern',
   MONSTER_EGG = 'minecraft:monster_egg',
+  MOOSHROOM_SPAWN_EGG = 'minecraft:mooshroom_spawn_egg',
   MOSS_BLOCK = 'minecraft:moss_block',
   MOSS_CARPET = 'minecraft:moss_carpet',
   MOSSY_COBBLESTONE = 'minecraft:mossy_cobblestone',
   MOSSY_COBBLESTONE_STAIRS = 'minecraft:mossy_cobblestone_stairs',
   MOSSY_STONE_BRICK_STAIRS = 'minecraft:mossy_stone_brick_stairs',
-  MOVINGBLOCK = 'minecraft:movingBlock',
+  MOVINGBLOCK = 'minecraft:movingblock',
+  MULE_SPAWN_EGG = 'minecraft:mule_spawn_egg',
+  MUSHROOM_STEW = 'minecraft:mushroom_stew',
+  MUSIC_DISC_11 = 'minecraft:music_disc_11',
+  MUSIC_DISC_13 = 'minecraft:music_disc_13',
+  MUSIC_DISC_BLOCKS = 'minecraft:music_disc_blocks',
+  MUSIC_DISC_CAT = 'minecraft:music_disc_cat',
+  MUSIC_DISC_CHIRP = 'minecraft:music_disc_chirp',
+  MUSIC_DISC_FAR = 'minecraft:music_disc_far',
+  MUSIC_DISC_MALL = 'minecraft:music_disc_mall',
+  MUSIC_DISC_MELLOHI = 'minecraft:music_disc_mellohi',
+  MUSIC_DISC_PIGSTEP = 'minecraft:music_disc_pigstep',
+  MUSIC_DISC_STAL = 'minecraft:music_disc_stal',
+  MUSIC_DISC_STRAD = 'minecraft:music_disc_strad',
+  MUSIC_DISC_WAIT = 'minecraft:music_disc_wait',
+  MUSIC_DISC_WARD = 'minecraft:music_disc_ward',
+  MUTTON = 'minecraft:mutton',
   MYCELIUM = 'minecraft:mycelium',
+  NAME_TAG = 'minecraft:name_tag',
+  NAUTILUS_SHELL = 'minecraft:nautilus_shell',
   NETHER_BRICK = 'minecraft:nether_brick',
   NETHER_BRICK_FENCE = 'minecraft:nether_brick_fence',
   NETHER_BRICK_STAIRS = 'minecraft:nether_brick_stairs',
   NETHER_GOLD_ORE = 'minecraft:nether_gold_ore',
   NETHER_SPROUTS = 'minecraft:nether_sprouts',
+  NETHER_STAR = 'minecraft:nether_star',
   NETHER_WART = 'minecraft:nether_wart',
   NETHER_WART_BLOCK = 'minecraft:nether_wart_block',
+  NETHERBRICK = 'minecraft:netherbrick',
+  NETHERITE_AXE = 'minecraft:netherite_axe',
   NETHERITE_BLOCK = 'minecraft:netherite_block',
+  NETHERITE_BOOTS = 'minecraft:netherite_boots',
+  NETHERITE_CHESTPLATE = 'minecraft:netherite_chestplate',
+  NETHERITE_HELMET = 'minecraft:netherite_helmet',
+  NETHERITE_HOE = 'minecraft:netherite_hoe',
+  NETHERITE_INGOT = 'minecraft:netherite_ingot',
+  NETHERITE_LEGGINGS = 'minecraft:netherite_leggings',
+  NETHERITE_PICKAXE = 'minecraft:netherite_pickaxe',
+  NETHERITE_SCRAP = 'minecraft:netherite_scrap',
+  NETHERITE_SHOVEL = 'minecraft:netherite_shovel',
+  NETHERITE_SWORD = 'minecraft:netherite_sword',
   NETHERRACK = 'minecraft:netherrack',
   NETHERREACTOR = 'minecraft:netherreactor',
   NORMAL_STONE_STAIRS = 'minecraft:normal_stone_stairs',
   NOTEBLOCK = 'minecraft:noteblock',
+  NPC_SPAWN_EGG = 'minecraft:npc_spawn_egg',
+  OAK_BOAT = 'minecraft:oak_boat',
+  OAK_SIGN = 'minecraft:oak_sign',
   OAK_STAIRS = 'minecraft:oak_stairs',
   OBSERVER = 'minecraft:observer',
   OBSIDIAN = 'minecraft:obsidian',
+  OCELOT_SPAWN_EGG = 'minecraft:ocelot_spawn_egg',
+  ORANGE_DYE = 'minecraft:orange_dye',
   ORANGE_GLAZED_TERRACOTTA = 'minecraft:orange_glazed_terracotta',
   OXIDIZED_COPPER = 'minecraft:oxidized_copper',
   OXIDIZED_CUT_COPPER = 'minecraft:oxidized_cut_copper',
@@ -949,12 +707,26 @@ export enum Blocks {
   OXIDIZED_CUT_COPPER_STAIRS = 'minecraft:oxidized_cut_copper_stairs',
   OXIDIZED_DOUBLE_CUT_COPPER_SLAB = 'minecraft:oxidized_double_cut_copper_slab',
   PACKED_ICE = 'minecraft:packed_ice',
+  PAINTING = 'minecraft:painting',
+  PANDA_SPAWN_EGG = 'minecraft:panda_spawn_egg',
+  PAPER = 'minecraft:paper',
+  PARROT_SPAWN_EGG = 'minecraft:parrot_spawn_egg',
+  PHANTOM_MEMBRANE = 'minecraft:phantom_membrane',
+  PHANTOM_SPAWN_EGG = 'minecraft:phantom_spawn_egg',
+  PIG_SPAWN_EGG = 'minecraft:pig_spawn_egg',
+  PIGLIN_BANNER_PATTERN = 'minecraft:piglin_banner_pattern',
+  PIGLIN_BRUTE_SPAWN_EGG = 'minecraft:piglin_brute_spawn_egg',
+  PIGLIN_SPAWN_EGG = 'minecraft:piglin_spawn_egg',
+  PILLAGER_SPAWN_EGG = 'minecraft:pillager_spawn_egg',
+  PINK_DYE = 'minecraft:pink_dye',
   PINK_GLAZED_TERRACOTTA = 'minecraft:pink_glazed_terracotta',
   PISTON = 'minecraft:piston',
-  PISTONARMCOLLISION = 'minecraft:pistonArmCollision',
+  PISTONARMCOLLISION = 'minecraft:pistonarmcollision',
   PLANKS = 'minecraft:planks',
   PODZOL = 'minecraft:podzol',
   POINTED_DRIPSTONE = 'minecraft:pointed_dripstone',
+  POISONOUS_POTATO = 'minecraft:poisonous_potato',
+  POLAR_BEAR_SPAWN_EGG = 'minecraft:polar_bear_spawn_egg',
   POLISHED_ANDESITE_STAIRS = 'minecraft:polished_andesite_stairs',
   POLISHED_BASALT = 'minecraft:polished_basalt',
   POLISHED_BLACKSTONE = 'minecraft:polished_blackstone',
@@ -976,27 +748,56 @@ export enum Blocks {
   POLISHED_DEEPSLATE_WALL = 'minecraft:polished_deepslate_wall',
   POLISHED_DIORITE_STAIRS = 'minecraft:polished_diorite_stairs',
   POLISHED_GRANITE_STAIRS = 'minecraft:polished_granite_stairs',
+  POPPED_CHORUS_FRUIT = 'minecraft:popped_chorus_fruit',
+  PORKCHOP = 'minecraft:porkchop',
   PORTAL = 'minecraft:portal',
+  POTATO = 'minecraft:potato',
   POTATOES = 'minecraft:potatoes',
+  POTION = 'minecraft:potion',
   POWDER_SNOW = 'minecraft:powder_snow',
+  POWDER_SNOW_BUCKET = 'minecraft:powder_snow_bucket',
   POWERED_COMPARATOR = 'minecraft:powered_comparator',
   POWERED_REPEATER = 'minecraft:powered_repeater',
   PRISMARINE = 'minecraft:prismarine',
   PRISMARINE_BRICKS_STAIRS = 'minecraft:prismarine_bricks_stairs',
+  PRISMARINE_CRYSTALS = 'minecraft:prismarine_crystals',
+  PRISMARINE_SHARD = 'minecraft:prismarine_shard',
   PRISMARINE_STAIRS = 'minecraft:prismarine_stairs',
+  PUFFERFISH = 'minecraft:pufferfish',
+  PUFFERFISH_BUCKET = 'minecraft:pufferfish_bucket',
+  PUFFERFISH_SPAWN_EGG = 'minecraft:pufferfish_spawn_egg',
   PUMPKIN = 'minecraft:pumpkin',
+  PUMPKIN_PIE = 'minecraft:pumpkin_pie',
+  PUMPKIN_SEEDS = 'minecraft:pumpkin_seeds',
   PUMPKIN_STEM = 'minecraft:pumpkin_stem',
+  PURPLE_DYE = 'minecraft:purple_dye',
   PURPLE_GLAZED_TERRACOTTA = 'minecraft:purple_glazed_terracotta',
   PURPUR_BLOCK = 'minecraft:purpur_block',
   PURPUR_STAIRS = 'minecraft:purpur_stairs',
+  QUARTZ = 'minecraft:quartz',
   QUARTZ_BLOCK = 'minecraft:quartz_block',
   QUARTZ_BRICKS = 'minecraft:quartz_bricks',
   QUARTZ_ORE = 'minecraft:quartz_ore',
   QUARTZ_STAIRS = 'minecraft:quartz_stairs',
+  RABBIT = 'minecraft:rabbit',
+  RABBIT_FOOT = 'minecraft:rabbit_foot',
+  RABBIT_HIDE = 'minecraft:rabbit_hide',
+  RABBIT_SPAWN_EGG = 'minecraft:rabbit_spawn_egg',
+  RABBIT_STEW = 'minecraft:rabbit_stew',
   RAIL = 'minecraft:rail',
+  RAPID_FERTILIZER = 'minecraft:rapid_fertilizer',
+  RAVAGER_SPAWN_EGG = 'minecraft:ravager_spawn_egg',
+  RAW_COPPER = 'minecraft:raw_copper',
   RAW_COPPER_BLOCK = 'minecraft:raw_copper_block',
+  RAW_GOLD = 'minecraft:raw_gold',
   RAW_GOLD_BLOCK = 'minecraft:raw_gold_block',
+  RAW_IRON = 'minecraft:raw_iron',
   RAW_IRON_BLOCK = 'minecraft:raw_iron_block',
+  REAL_DOUBLE_STONE_SLAB = 'minecraft:real_double_stone_slab',
+  REAL_DOUBLE_STONE_SLAB2 = 'minecraft:real_double_stone_slab2',
+  REAL_DOUBLE_STONE_SLAB3 = 'minecraft:real_double_stone_slab3',
+  REAL_DOUBLE_STONE_SLAB4 = 'minecraft:real_double_stone_slab4',
+  RED_DYE = 'minecraft:red_dye',
   RED_FLOWER = 'minecraft:red_flower',
   RED_GLAZED_TERRACOTTA = 'minecraft:red_glazed_terracotta',
   RED_MUSHROOM = 'minecraft:red_mushroom',
@@ -1005,29 +806,46 @@ export enum Blocks {
   RED_NETHER_BRICK_STAIRS = 'minecraft:red_nether_brick_stairs',
   RED_SANDSTONE = 'minecraft:red_sandstone',
   RED_SANDSTONE_STAIRS = 'minecraft:red_sandstone_stairs',
+  REDSTONE = 'minecraft:redstone',
   REDSTONE_BLOCK = 'minecraft:redstone_block',
   REDSTONE_LAMP = 'minecraft:redstone_lamp',
   REDSTONE_ORE = 'minecraft:redstone_ore',
   REDSTONE_TORCH = 'minecraft:redstone_torch',
   REDSTONE_WIRE = 'minecraft:redstone_wire',
-  REEDS = 'minecraft:reeds',
+  REPEATER = 'minecraft:repeater',
   REPEATING_COMMAND_BLOCK = 'minecraft:repeating_command_block',
   RESERVED6 = 'minecraft:reserved6',
   RESPAWN_ANCHOR = 'minecraft:respawn_anchor',
+  ROTTEN_FLESH = 'minecraft:rotten_flesh',
+  SADDLE = 'minecraft:saddle',
+  SALMON = 'minecraft:salmon',
+  SALMON_BUCKET = 'minecraft:salmon_bucket',
+  SALMON_SPAWN_EGG = 'minecraft:salmon_spawn_egg',
   SAND = 'minecraft:sand',
   SANDSTONE = 'minecraft:sandstone',
   SANDSTONE_STAIRS = 'minecraft:sandstone_stairs',
   SAPLING = 'minecraft:sapling',
   SCAFFOLDING = 'minecraft:scaffolding',
   SCULK_SENSOR = 'minecraft:sculk_sensor',
+  SCUTE = 'minecraft:scute',
   SEA_PICKLE = 'minecraft:sea_pickle',
   SEAGRASS = 'minecraft:seagrass',
-  SEALANTERN = 'minecraft:seaLantern',
+  SEALANTERN = 'minecraft:sealantern',
+  SHEARS = 'minecraft:shears',
+  SHEEP_SPAWN_EGG = 'minecraft:sheep_spawn_egg',
+  SHIELD = 'minecraft:shield',
   SHROOMLIGHT = 'minecraft:shroomlight',
   SHULKER_BOX = 'minecraft:shulker_box',
+  SHULKER_SHELL = 'minecraft:shulker_shell',
+  SHULKER_SPAWN_EGG = 'minecraft:shulker_spawn_egg',
   SILVER_GLAZED_TERRACOTTA = 'minecraft:silver_glazed_terracotta',
-  SKULL = 'minecraft:skull',
+  SILVERFISH_SPAWN_EGG = 'minecraft:silverfish_spawn_egg',
+  SKELETON_HORSE_SPAWN_EGG = 'minecraft:skeleton_horse_spawn_egg',
+  SKELETON_SPAWN_EGG = 'minecraft:skeleton_spawn_egg',
+  SKULL_BANNER_PATTERN = 'minecraft:skull_banner_pattern',
   SLIME = 'minecraft:slime',
+  SLIME_BALL = 'minecraft:slime_ball',
+  SLIME_SPAWN_EGG = 'minecraft:slime_spawn_egg',
   SMALL_AMETHYST_BUD = 'minecraft:small_amethyst_bud',
   SMALL_DRIPLEAF_BLOCK = 'minecraft:small_dripleaf_block',
   SMITHING_TABLE = 'minecraft:smithing_table',
@@ -1039,41 +857,56 @@ export enum Blocks {
   SMOOTH_STONE = 'minecraft:smooth_stone',
   SNOW = 'minecraft:snow',
   SNOW_LAYER = 'minecraft:snow_layer',
+  SNOWBALL = 'minecraft:snowball',
   SOUL_CAMPFIRE = 'minecraft:soul_campfire',
   SOUL_FIRE = 'minecraft:soul_fire',
   SOUL_LANTERN = 'minecraft:soul_lantern',
   SOUL_SAND = 'minecraft:soul_sand',
   SOUL_SOIL = 'minecraft:soul_soil',
   SOUL_TORCH = 'minecraft:soul_torch',
+  SPARKLER = 'minecraft:sparkler',
+  SPAWN_EGG = 'minecraft:spawn_egg',
+  SPIDER_EYE = 'minecraft:spider_eye',
+  SPIDER_SPAWN_EGG = 'minecraft:spider_spawn_egg',
+  SPLASH_POTION = 'minecraft:splash_potion',
   SPONGE = 'minecraft:sponge',
   SPORE_BLOSSOM = 'minecraft:spore_blossom',
+  SPRUCE_BOAT = 'minecraft:spruce_boat',
   SPRUCE_BUTTON = 'minecraft:spruce_button',
   SPRUCE_DOOR = 'minecraft:spruce_door',
   SPRUCE_FENCE_GATE = 'minecraft:spruce_fence_gate',
   SPRUCE_PRESSURE_PLATE = 'minecraft:spruce_pressure_plate',
+  SPRUCE_SIGN = 'minecraft:spruce_sign',
   SPRUCE_STAIRS = 'minecraft:spruce_stairs',
   SPRUCE_STANDING_SIGN = 'minecraft:spruce_standing_sign',
   SPRUCE_TRAPDOOR = 'minecraft:spruce_trapdoor',
   SPRUCE_WALL_SIGN = 'minecraft:spruce_wall_sign',
+  SPYGLASS = 'minecraft:spyglass',
+  SQUID_SPAWN_EGG = 'minecraft:squid_spawn_egg',
   STAINED_GLASS = 'minecraft:stained_glass',
   STAINED_GLASS_PANE = 'minecraft:stained_glass_pane',
   STAINED_HARDENED_CLAY = 'minecraft:stained_hardened_clay',
   STANDING_BANNER = 'minecraft:standing_banner',
   STANDING_SIGN = 'minecraft:standing_sign',
+  STICK = 'minecraft:stick',
   STICKY_PISTON = 'minecraft:sticky_piston',
-  STICKYPISTONARMCOLLISION = 'minecraft:stickyPistonArmCollision',
+  STICKYPISTONARMCOLLISION = 'minecraft:stickypistonarmcollision',
   STONE = 'minecraft:stone',
+  STONE_AXE = 'minecraft:stone_axe',
   STONE_BRICK_STAIRS = 'minecraft:stone_brick_stairs',
   STONE_BUTTON = 'minecraft:stone_button',
+  STONE_HOE = 'minecraft:stone_hoe',
+  STONE_PICKAXE = 'minecraft:stone_pickaxe',
   STONE_PRESSURE_PLATE = 'minecraft:stone_pressure_plate',
-  STONE_SLAB = 'minecraft:stone_slab',
-  STONE_SLAB2 = 'minecraft:stone_slab2',
-  STONE_SLAB3 = 'minecraft:stone_slab3',
-  STONE_SLAB4 = 'minecraft:stone_slab4',
+  STONE_SHOVEL = 'minecraft:stone_shovel',
   STONE_STAIRS = 'minecraft:stone_stairs',
+  STONE_SWORD = 'minecraft:stone_sword',
   STONEBRICK = 'minecraft:stonebrick',
   STONECUTTER = 'minecraft:stonecutter',
   STONECUTTER_BLOCK = 'minecraft:stonecutter_block',
+  STRAY_SPAWN_EGG = 'minecraft:stray_spawn_egg',
+  STRIDER_SPAWN_EGG = 'minecraft:strider_spawn_egg',
+  STRING = 'minecraft:string',
   STRIPPED_ACACIA_LOG = 'minecraft:stripped_acacia_log',
   STRIPPED_BIRCH_LOG = 'minecraft:stripped_birch_log',
   STRIPPED_CRIMSON_HYPHAE = 'minecraft:stripped_crimson_hyphae',
@@ -1086,18 +919,30 @@ export enum Blocks {
   STRIPPED_WARPED_STEM = 'minecraft:stripped_warped_stem',
   STRUCTURE_BLOCK = 'minecraft:structure_block',
   STRUCTURE_VOID = 'minecraft:structure_void',
+  SUGAR = 'minecraft:sugar',
+  SUGAR_CANE = 'minecraft:sugar_cane',
+  SUSPICIOUS_STEW = 'minecraft:suspicious_stew',
+  SWEET_BERRIES = 'minecraft:sweet_berries',
   SWEET_BERRY_BUSH = 'minecraft:sweet_berry_bush',
   TALLGRASS = 'minecraft:tallgrass',
   TARGET = 'minecraft:target',
   TINTED_GLASS = 'minecraft:tinted_glass',
   TNT = 'minecraft:tnt',
+  TNT_MINECART = 'minecraft:tnt_minecart',
   TORCH = 'minecraft:torch',
+  TOTEM_OF_UNDYING = 'minecraft:totem_of_undying',
   TRAPDOOR = 'minecraft:trapdoor',
   TRAPPED_CHEST = 'minecraft:trapped_chest',
-  TRIPWIRE = 'minecraft:tripWire',
+  TRIDENT = 'minecraft:trident',
+  TRIPWIRE = 'minecraft:tripwire',
   TRIPWIRE_HOOK = 'minecraft:tripwire_hook',
+  TROPICAL_FISH = 'minecraft:tropical_fish',
+  TROPICAL_FISH_BUCKET = 'minecraft:tropical_fish_bucket',
+  TROPICAL_FISH_SPAWN_EGG = 'minecraft:tropical_fish_spawn_egg',
   TUFF = 'minecraft:tuff',
   TURTLE_EGG = 'minecraft:turtle_egg',
+  TURTLE_HELMET = 'minecraft:turtle_helmet',
+  TURTLE_SPAWN_EGG = 'minecraft:turtle_spawn_egg',
   TWISTING_VINES = 'minecraft:twisting_vines',
   UNDERWATER_TORCH = 'minecraft:underwater_torch',
   UNDYED_SHULKER_BOX = 'minecraft:undyed_shulker_box',
@@ -1105,20 +950,26 @@ export enum Blocks {
   UNLIT_REDSTONE_TORCH = 'minecraft:unlit_redstone_torch',
   UNPOWERED_COMPARATOR = 'minecraft:unpowered_comparator',
   UNPOWERED_REPEATER = 'minecraft:unpowered_repeater',
+  VEX_SPAWN_EGG = 'minecraft:vex_spawn_egg',
+  VILLAGER_SPAWN_EGG = 'minecraft:villager_spawn_egg',
+  VINDICATOR_SPAWN_EGG = 'minecraft:vindicator_spawn_egg',
   VINE = 'minecraft:vine',
   WALL_BANNER = 'minecraft:wall_banner',
   WALL_SIGN = 'minecraft:wall_sign',
+  WANDERING_TRADER_SPAWN_EGG = 'minecraft:wandering_trader_spawn_egg',
   WARPED_BUTTON = 'minecraft:warped_button',
   WARPED_DOOR = 'minecraft:warped_door',
   WARPED_DOUBLE_SLAB = 'minecraft:warped_double_slab',
   WARPED_FENCE = 'minecraft:warped_fence',
   WARPED_FENCE_GATE = 'minecraft:warped_fence_gate',
   WARPED_FUNGUS = 'minecraft:warped_fungus',
+  WARPED_FUNGUS_ON_A_STICK = 'minecraft:warped_fungus_on_a_stick',
   WARPED_HYPHAE = 'minecraft:warped_hyphae',
   WARPED_NYLIUM = 'minecraft:warped_nylium',
   WARPED_PLANKS = 'minecraft:warped_planks',
   WARPED_PRESSURE_PLATE = 'minecraft:warped_pressure_plate',
   WARPED_ROOTS = 'minecraft:warped_roots',
+  WARPED_SIGN = 'minecraft:warped_sign',
   WARPED_SLAB = 'minecraft:warped_slab',
   WARPED_STAIRS = 'minecraft:warped_stairs',
   WARPED_STANDING_SIGN = 'minecraft:warped_standing_sign',
@@ -1127,6 +978,7 @@ export enum Blocks {
   WARPED_WALL_SIGN = 'minecraft:warped_wall_sign',
   WARPED_WART_BLOCK = 'minecraft:warped_wart_block',
   WATER = 'minecraft:water',
+  WATER_BUCKET = 'minecraft:water_bucket',
   WATERLILY = 'minecraft:waterlily',
   WAXED_COPPER = 'minecraft:waxed_copper',
   WAXED_CUT_COPPER = 'minecraft:waxed_cut_copper',
@@ -1156,14 +1008,32 @@ export enum Blocks {
   WEB = 'minecraft:web',
   WEEPING_VINES = 'minecraft:weeping_vines',
   WHEAT = 'minecraft:wheat',
+  WHEAT_SEEDS = 'minecraft:wheat_seeds',
+  WHITE_DYE = 'minecraft:white_dye',
   WHITE_GLAZED_TERRACOTTA = 'minecraft:white_glazed_terracotta',
+  WITCH_SPAWN_EGG = 'minecraft:witch_spawn_egg',
   WITHER_ROSE = 'minecraft:wither_rose',
+  WITHER_SKELETON_SPAWN_EGG = 'minecraft:wither_skeleton_spawn_egg',
+  WOLF_SPAWN_EGG = 'minecraft:wolf_spawn_egg',
   WOOD = 'minecraft:wood',
+  WOODEN_AXE = 'minecraft:wooden_axe',
   WOODEN_BUTTON = 'minecraft:wooden_button',
   WOODEN_DOOR = 'minecraft:wooden_door',
+  WOODEN_HOE = 'minecraft:wooden_hoe',
+  WOODEN_PICKAXE = 'minecraft:wooden_pickaxe',
   WOODEN_PRESSURE_PLATE = 'minecraft:wooden_pressure_plate',
+  WOODEN_SHOVEL = 'minecraft:wooden_shovel',
   WOODEN_SLAB = 'minecraft:wooden_slab',
+  WOODEN_SWORD = 'minecraft:wooden_sword',
   WOOL = 'minecraft:wool',
+  WRITABLE_BOOK = 'minecraft:writable_book',
+  WRITTEN_BOOK = 'minecraft:written_book',
+  YELLOW_DYE = 'minecraft:yellow_dye',
   YELLOW_FLOWER = 'minecraft:yellow_flower',
   YELLOW_GLAZED_TERRACOTTA = 'minecraft:yellow_glazed_terracotta',
+  ZOGLIN_SPAWN_EGG = 'minecraft:zoglin_spawn_egg',
+  ZOMBIE_HORSE_SPAWN_EGG = 'minecraft:zombie_horse_spawn_egg',
+  ZOMBIE_PIGMAN_SPAWN_EGG = 'minecraft:zombie_pigman_spawn_egg',
+  ZOMBIE_SPAWN_EGG = 'minecraft:zombie_spawn_egg',
+  ZOMBIE_VILLAGER_SPAWN_EGG = 'minecraft:zombie_villager_spawn_egg',
 }

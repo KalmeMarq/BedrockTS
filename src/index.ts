@@ -13,12 +13,15 @@ export const {
   BlastFurnaceRecipe,
   ShapelessRecipe,
   ShapedRecipe,
+  PotionRecipe,
   GetRecipesRegistry,
   GetBlocksRegistry
 } = addonpack
 
-export { BlockProperties, MCBlock } from './data/Block'
+export { BEvent, BlockProperties, Blocks, CollisionBox, MCBlock, TEventGetter } from './data/Block'
+export { Items } from './data/Item'
 export { CookingRecipeBuilder } from './recipes/CookingRecipe'
+export { PotionRecipeBuilder } from './recipes/PotionRecipe'
 export { ShapedRecipeBuilder } from './recipes/ShapedRecipe'
 export { ShapelessRecipeBuilder } from './recipes/ShapelessRecipe'
 export * from './types'

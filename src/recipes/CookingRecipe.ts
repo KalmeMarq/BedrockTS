@@ -1,4 +1,4 @@
-import { TRecipeFurnaceTags } from ".."
+import { TItemLike, TRecipeFurnaceTags } from ".."
 import AddonPack, { Registry } from "../addon"
 import { getFromRegex, JsonArray, JsonObject } from "../utils"
 import { RecipeClass } from "./Recipe"
@@ -6,13 +6,13 @@ import { RecipeClass } from "./Recipe"
 export class FurnaceRecipeClass {
   public id: string
   public path: string
-  private input: string
-  private output: string
+  private input: TItemLike
+  private output: TItemLike
   private tags: TRecipeFurnaceTags[]
 
-  public constructor(path: string, input: string, output: string)
-  public constructor(path: string, tags: TRecipeFurnaceTags[], input: string, output: string)
-  public constructor(path: string, tags: TRecipeFurnaceTags[] | string, input: string, output?: string) {
+  public constructor(path: string, input: TItemLike, output: TItemLike)
+  public constructor(path: string, tags: TRecipeFurnaceTags[], input: TItemLike, output: TItemLike)
+  public constructor(path: string, tags: TRecipeFurnaceTags[] | TItemLike, input: TItemLike, output?: TItemLike) {
     this.path = path
     this.id = getFromRegex(path, /[^/]+$/)[0] ?? 'unknown'
     this.tags = typeof tags === 'string' ? ['furnace'] : tags
@@ -48,51 +48,51 @@ export class FurnaceRecipeClass {
 }
 
 export class SmokerRecipeClass extends FurnaceRecipeClass {
-  public constructor(path: string, input: string, output: string) {
+  public constructor(path: string, input: TItemLike, output: TItemLike) {
     super(path, ['smoker'], input, output)
   }
 }
 
 export class BlastFurnaceRecipeClass extends FurnaceRecipeClass {
-  public constructor(path: string, input: string, output: string) {
+  public constructor(path: string, input: TItemLike, output: TItemLike) {
     super(path, ['blast_furnace'], input, output)
   }
 }
 
 export class CampfireRecipeClass extends FurnaceRecipeClass {
-  public constructor(path: string, input: string, output: string) {
+  public constructor(path: string, input: TItemLike, output: TItemLike) {
     super(path, ['campfire'], input, output)
   }
 }
 
 export class CookingRecipeBuilder {
   private tags: TRecipeFurnaceTags[]
-  private input: string
-  private output: string
+  private input: TItemLike
+  private output: TItemLike
 
-  private constructor(tags: TRecipeFurnaceTags[], input: string, output: string) {
+  private constructor(tags: TRecipeFurnaceTags[], input: TItemLike, output: TItemLike) {
     this.tags = tags
     this.input = input
     this.output = output
   }
 
-  public static cooking(input: string, output: string, tags: TRecipeFurnaceTags[]) {
+  public static cooking(input: TItemLike, output: TItemLike, tags: TRecipeFurnaceTags[]) {
     return new CookingRecipeBuilder(tags, input, output)
   }
 
-  public static smelting(input: string, output: string) {
+  public static smelting(input: TItemLike, output: TItemLike) {
     return new CookingRecipeBuilder(['furnace'], input, output)
   }
 
-  public static blasting(input: string, output: string) {
+  public static blasting(input: TItemLike, output: TItemLike) {
     return new CookingRecipeBuilder(['blast_furnace'], input, output)
   }
 
-  public static smoking(input: string, output: string) {
+  public static smoking(input: TItemLike, output: TItemLike) {
     return new CookingRecipeBuilder(['smoker'], input, output)
   }
 
-  public static campfireCooking(input: string, output: string) {
+  public static campfireCooking(input: TItemLike, output: TItemLike) {
     return new CookingRecipeBuilder(['campfire'], input, output)
   }
 

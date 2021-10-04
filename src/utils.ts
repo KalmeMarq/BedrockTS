@@ -12,14 +12,18 @@ export function compactBasicArray(obj: any, indent = 2) {
   )
 }
 
-export class JsonArray {
-  private arr: Object[] = []
+export class JsonArray<T = any> {
+  private arr: T[] = []
+
+  public constructor(array?: T[]) {
+    if (array) this.arr = [...array]
+  }
 
   public add(value: boolean | string | number | JsonObject | JsonArray): void {
     if (value instanceof JsonObject || value instanceof JsonArray) {
       this.arr.push(value.toJSON())
     } else {
-      this.arr.push(value)
+      this.arr.push(value as any)
     }
   }
 
@@ -36,15 +40,15 @@ export class JsonArray {
   }
 }
 
-export class JsonObject {
-  private obj: Record<string, Object> = {}
+export class JsonObject<T = any> {
+  private obj: Record<string, T> = {}
 
-  public add(key: string, value: JsonObject | JsonArray): void {
+  public add(key: string, value: JsonObject<T> | JsonArray): void {
     this.obj[key] = value.toJSON()
   }
 
   public addProperty(key: string, value: boolean | string | number): void {
-    this.obj[key] = value
+    this.obj[key] = value as any
   }
 
   public toString(): any {

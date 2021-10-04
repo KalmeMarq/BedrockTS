@@ -1,3 +1,4 @@
+import { Blocks, Items } from "."
 import { Color } from "./styles"
 
 export type TType = 'skin_pack' | 'resource_pack' | 'addon_pack'
@@ -57,3 +58,16 @@ export enum EDefaultGeo {
 export type TBlockShape = 'invisible' | 'block' | 'cross_texture' | 'torch' | 'fire' | 'water' | 'red_dust' | 'rows' | 'door' | 'ladder' | 'rail' | 'stairs' | 'fence' | 'lever' | 'cactus' | 'bed' | 'diode' | 'iron_fence' | 'stem' | 'vine' | 'fence_gate' | 'chest' | 'lilypad' | 'brewing_stand' | 'portal_frame' | 'cocoa' | 'tree' | 'cobblestone_wall' | 'double_plant' | 'flower_pot' | 'anvil' | 'dragon_egg' | 'structure_void' | 'block_half' | 'top_snow' | 'tripwire' | 'tripwire_hook' | 'cauldron' | 'repeater' | 'comparator' | 'hopper' | 'slime_block' | 'piston' | 'beacon' | 'chorus_plant' | 'chorus_flower' | 'end_portal' | 'end_rod' | 'skull' | 'facing_block' | 'command_block' | 'terracotta' | 'double_side_fence' | 'frame' | 'shulker_box' | 'doublesided_cross_texture' | 'doublesided_double_plant' | 'doublesided_rows' | 'element_block' | 'chemistry_table' | 'coral_fan' | 'seagrass' | 'kelp' | 'trapdoor' | 'sea_pickle' | 'conduit' | 'turtle_egg' | 'bubble_column' | 'barrier' | 'sign' | 'bamboo' | 'bamboo_sapling' | 'scaffolding' | 'grindstone' | 'bell' | 'lantern' | 'campfire' | 'lectern' | 'sweet_berry_bush' | 'cartography_table' | 'stonecutter_block' | 'chain' | 'sculk_sensor' | 'azalea' | 'flowering_azalea' | 'glow_frame' | 'glow_lichen'
 
 export type TTerrainTextures = string | string[] | { path: string, weight: number }[]
+
+function enumKeysAsString<TEnum>(theEnum: TEnum): keyof TEnum {
+  // eliminate numeric keys
+  const keys = Object.keys(theEnum).filter(x => 
+    (+x)+"" !== x) as (keyof TEnum)[];
+  // return some random key
+  return keys[Math.floor(Math.random()*keys.length)]; 
+}
+
+const someKey = enumKeysAsString(Blocks);
+
+// export type TItemLike = typeof someKey
+export type TItemLike = Blocks | Items | string
